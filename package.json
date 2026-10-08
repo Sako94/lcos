@@ -9,7 +9,9 @@
     "lint": "eslint",
     "test:db": "scripts/db-reset-local.sh >/dev/null && su postgres -c \"psql -v ON_ERROR_STOP=1 -d lcos_dev -f supabase/tests/rls_and_rules.sql\" | grep -E \"PASS|FAIL\"",
     "test:e2e": "scripts/db-reset-local.sh >/dev/null && CHROMIUM_PATH=${CHROMIUM_PATH:-/opt/pw-browsers/chromium} node scripts/smoke.mjs",
-    "db:reset": "scripts/db-reset-local.sh"
+    "db:reset": "scripts/db-reset-local.sh",
+    "seed:remote": "node scripts/seed-remote.mjs",
+    "db:deploy": "scripts/deploy-supabase.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.132.0",
