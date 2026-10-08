@@ -78,7 +78,7 @@ export default async function FlowsPage({ params }: { params: Promise<{ slug: st
                     </div>
                   </ActionForm>
                 ) : (
-                  <pre className="whitespace-pre-wrap rounded bg-neutral-50 p-2 text-xs">{f.documentedLogic ?? "Not documented."}</pre>
+                  <pre className="whitespace-pre-wrap rounded bg-bg-3 p-2 text-xs">{f.documentedLogic ?? "Not documented."}</pre>
                 )}
                 {canEdit && !f.documentedLogic ? (
                   <div className="mt-1">

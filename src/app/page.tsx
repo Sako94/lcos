@@ -79,7 +79,7 @@ export default async function Home() {
               {data.findings.map((f) => (
                 <li key={f.id} className="flex items-center justify-between gap-2">
                   <Link href={`/clients/${f.slug}/audit`} className="hover:underline">
-                    <span className="mr-2 rounded bg-neutral-900 px-1.5 py-0.5 text-xs text-white">S{f.severity}</span>
+                    <span className="mr-2 rounded bg-lime px-1.5 py-0.5 font-mono text-[10px] font-bold text-bg">S{f.severity}</span>
                     {f.clientName}: {f.title}
                   </Link>
                   {f.createdByKind === "agent" ? <AgentTag runId={f.agentRunId} /> : <Chip value="user" />}

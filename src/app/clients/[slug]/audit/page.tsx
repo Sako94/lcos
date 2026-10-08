@@ -55,7 +55,7 @@ export default async function AuditPage({ params }: { params: Promise<{ slug: st
               <Empty>No audit yet. Create one on the right.</Empty>
             ) : (
               <>
-                <p className="mb-3 text-3xl font-semibold">{d.latest.overall ?? "—"}<span className="text-base text-neutral-500">/100 weighted</span></p>
+                <p className="mb-3 font-mono text-4xl font-bold text-lime">{d.latest.overall ?? "—"}<span className="ml-1 font-display text-xs uppercase tracking-[0.1em] text-fg-muted">/100 weighted</span></p>
                 <Table head={["Area", "Weight", "Score", "Reason and evidence", ""]}>
                   {d.template.map((a) => {
                     const s = d.latest.scores[a.key];
@@ -64,7 +64,7 @@ export default async function AuditPage({ params }: { params: Promise<{ slug: st
                         <td className="py-2 pr-4 font-medium">{a.name}<br /><span className="text-xs font-normal text-neutral-500">{a.checks}</span></td>
                         <td className="py-2 pr-4">{a.weight}</td>
                         <td className="py-2 pr-4">
-                          {s?.score != null ? <span className="text-lg font-semibold">{s.score}</span> : <span className="text-amber-700">Unscored</span>}
+                          {s?.score != null ? <span className="font-mono text-lg font-bold text-fg">{s.score}</span> : <span className="text-amber-700">Unscored</span>}
                           {s && !s.verified ? <span className="block text-xs text-amber-700">proposed</span> : null}
                           {s?.set_by_kind === "agent" ? <AgentTag /> : null}
                         </td>
@@ -114,7 +114,7 @@ export default async function AuditPage({ params }: { params: Promise<{ slug: st
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-medium">
-                        <span className="mr-2 rounded bg-neutral-900 px-1.5 py-0.5 text-xs text-white">S{f.severity}</span>
+                        <span className="mr-2 rounded bg-lime px-1.5 py-0.5 font-mono text-[10px] font-bold text-bg">S{f.severity}</span>
                         {f.title}
                       </p>
                       <p className="mt-1 text-xs text-neutral-500">

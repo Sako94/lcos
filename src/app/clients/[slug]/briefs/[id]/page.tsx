@@ -97,14 +97,14 @@ export default async function BriefPage({ params }: { params: Promise<{ slug: st
             {copies.length === 0 ? <Empty>No copy yet. Ask the agent to draft, or add a version.</Empty> : null}
             <div className="space-y-4">
               {copies.map((c) => (
-                <div key={c.id} className={`rounded-lg border p-3 ${c.version === brief.internalApprovedVersion ? "border-emerald-300 bg-emerald-50/40" : "border-neutral-200"}`}>
+                <div key={c.id} className={`rounded-lg border p-3 ${c.version === brief.internalApprovedVersion ? "border-lime/50 bg-lime/5" : "border-neutral-200"}`}>
                   <p className="text-xs text-neutral-500">
                     v{c.version} · {c.createdByKind === "agent" ? <AgentTag runId={c.agentRunId} /> : c.createdBy} · {fmtDate(c.createdAt)}
                     {c.version === brief.internalApprovedVersion ? <span className="ml-2 text-emerald-800">approved version</span> : null}
                   </p>
                   {c.subjectLines.length ? <p className="mt-1 text-sm"><span className="font-medium">Subjects:</span> {c.subjectLines.join(" / ")}</p> : null}
                   {c.previewText ? <p className="text-sm"><span className="font-medium">Preview:</span> {c.previewText}</p> : null}
-                  {c.body ? <pre className="mt-2 whitespace-pre-wrap rounded bg-white p-2 text-sm">{c.body}</pre> : null}
+                  {c.body ? <pre className="mt-2 whitespace-pre-wrap rounded bg-bg-3 p-2 text-sm">{c.body}</pre> : null}
                   {c.smsBody ? <p className="mt-2 text-sm"><span className="font-medium">SMS:</span> {c.smsBody}</p> : null}
                   <p className="mt-2 text-xs text-neutral-500">
                     Facts cited: {c.factIds.length === 0 ? "none" : c.factIds.map((fid) => facts.get(fid)?.statement.slice(0, 50) ?? "(no longer approved)").join(" · ")}

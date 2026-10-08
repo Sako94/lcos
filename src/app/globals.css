@@ -1,26 +1,127 @@
 @import "tailwindcss";
 
+/*
+  Wavy LCOS design system — derived from wavystudios.com
+  Surfaces: #0a0a0a / #111111 / #1a1a1a · borders #1a1a1a / #2a2a2a
+  Text: #ffffff / #c0c0c0 / #8a8a8a · Accent: lime #c8ff00 (dim #a8d900)
+  Semantic: emerald #10b981 (good), coral #ff6b4a (critical), blue #4a9eff (info), purple #a855f7 (agent), teal #14b8a6
+  Type: Syne (display, uppercase tracked labels) · Space Mono (data, code, ids)
+*/
+
+@theme {
+  --font-display: "Syne", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Syne", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Space Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-bg: #0a0a0a;
+  --color-bg-2: #111111;
+  --color-bg-3: #1a1a1a;
+  --color-line: #2a2a2a;
+  --color-line-soft: #1a1a1a;
+  --color-fg: #ffffff;
+  --color-fg-2: #c0c0c0;
+  --color-fg-muted: #8a8a8a;
+  --color-lime: #c8ff00;
+  --color-lime-dim: #a8d900;
+  --color-coral: #ff6b4a;
+  --color-blue: #4a9eff;
+  --color-emerald-brand: #10b981;
+  --color-purple: #a855f7;
+  --color-teal-brand: #14b8a6;
+
+  /* Remap the neutral scale the screens already use onto the dark surface system */
+  --color-white: #111111;
+  --color-neutral-50: #0e0e0e;
+  --color-neutral-100: #171717;
+  --color-neutral-200: #2a2a2a;
+  --color-neutral-300: #343434;
+  --color-neutral-400: #6f6f6f;
+  --color-neutral-500: #8a8a8a;
+  --color-neutral-600: #a3a3a3;
+  --color-neutral-700: #c0c0c0;
+  --color-neutral-800: #e0e0e0;
+  --color-neutral-900: #ffffff;
+
+  /* Status tints on dark */
+  --color-amber-50: #2a2208;
+  --color-amber-200: #5c4a10;
+  --color-amber-700: #f2c744;
+  --color-amber-800: #f2c744;
+  --color-red-50: #2a1410;
+  --color-red-200: #5a2a20;
+  --color-red-300: #5a2a20;
+  --color-red-700: #ff6b4a;
+  --color-red-800: #ff6b4a;
+  --color-emerald-50: #0d2419;
+  --color-emerald-200: #1b4a35;
+  --color-emerald-300: #1b4a35;
+  --color-emerald-800: #34d399;
+  --color-sky-50: #0d1a2c;
+  --color-sky-200: #1d3a5e;
+  --color-sky-800: #4a9eff;
+  --color-violet-50: #1d1230;
+  --color-violet-200: #3d2666;
+  --color-violet-700: #c084fc;
+  --color-violet-800: #c084fc;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: dark;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: var(--color-bg);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+/* uppercase tracked labels, as on the site */
+.label, thead th, .card-title {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--color-fg-muted);
+}
+
+/* numbers, ids, code */
+pre, code, .mono, .num {
+  font-family: var(--font-mono);
+}
+
+input, select, textarea {
+  background: var(--color-bg-3);
+  color: var(--color-fg);
+  color-scheme: dark;
+}
+input::placeholder, textarea::placeholder { color: var(--color-fg-muted); }
+input[type="date"], input[type="datetime-local"] { color-scheme: dark; }
+select option { background: var(--color-bg-3); }
+
+a:hover { color: var(--color-lime); }
+
+details > summary { list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "+ "; color: var(--color-lime); }
+details[open] > summary::before { content: "– "; }
+
+::selection { background: var(--color-lime); color: #0a0a0a; }
+
+/* subtle grid texture behind the page, like the site hero */
+.page-bg {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 48px 48px;
 }

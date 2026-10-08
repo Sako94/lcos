@@ -59,7 +59,7 @@ export default async function ClientOverview({ params }: { params: Promise<{ slu
         <Card title="Scorecard">
           {d.audit ? (
             <div className="text-sm">
-              <p className="text-3xl font-semibold">{d.audit.overall ?? "—"}<span className="text-base text-neutral-500">/100</span></p>
+              <p className="font-mono text-4xl font-bold text-lime">{d.audit.overall ?? "—"}<span className="ml-1 font-display text-xs uppercase tracking-[0.1em] text-fg-muted">/100</span></p>
               <p className="mt-1 text-neutral-600">
                 {d.audit.kind.replace("_", " ")} audit to {fmtDate(d.audit.periodEnd)} · <Chip value={d.audit.status} />
               </p>

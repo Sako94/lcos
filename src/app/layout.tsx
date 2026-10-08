@@ -35,23 +35,29 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     : [];
   return (
     <html lang="en" className="h-full antialiased">
-      <body className="min-h-full bg-neutral-50 text-neutral-900">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+      </head>
+      <body className="page-bg min-h-full bg-bg text-fg">
         {user ? (
           <div className="flex min-h-screen">
-            <aside className="w-60 shrink-0 border-r border-neutral-200 bg-white px-4 py-5">
-              <Link href="/" className="block text-lg font-semibold">
-                Wavy LCOS
+            <aside className="w-60 shrink-0 border-r border-line-soft bg-bg-2 px-4 py-5">
+              <Link href="/" className="block font-display text-lg font-extrabold tracking-tight text-fg hover:text-lime">
+                WAVY<span className="text-lime">·</span>LCOS
               </Link>
+              <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.15em] text-fg-muted">Lifecycle Client OS</p>
               <nav className="mt-6 space-y-6 text-sm">
                 <div>
-                  <p className="mb-1 text-xs uppercase tracking-wide text-neutral-400">Agency</p>
+                  <p className="label mb-1">Agency</p>
                   <NavLink href="/">Home</NavLink>
                   <NavLink href="/playbook">Playbook</NavLink>
                   <NavLink href="/agent">Agent activity</NavLink>
                 </div>
                 {clients.map((c) => (
                   <div key={c.id}>
-                    <p className="mb-1 text-xs uppercase tracking-wide text-neutral-400">{c.name}</p>
+                    <p className="label mb-1">{c.name}</p>
                     <NavLink href={`/clients/${c.slug}`}>Overview</NavLink>
                     <NavLink href={`/clients/${c.slug}/facts`}>Source of Truth</NavLink>
                     <NavLink href={`/clients/${c.slug}/audit`}>Audit</NavLink>
@@ -61,15 +67,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   </div>
                 ))}
               </nav>
-              <div className="mt-10 border-t border-neutral-200 pt-4 text-xs text-neutral-500">
-                <p className="font-medium text-neutral-800">{user.fullName}</p>
-                <p>{user.role.replace("_", " ")}{user.canPublish ? " · publisher" : ""}</p>
+              <div className="mt-10 border-t border-line-soft pt-4 text-xs text-fg-muted">
+                <p className="font-semibold text-fg">{user.fullName}</p>
+                <p className="font-mono text-[10px] uppercase tracking-[0.1em]">{user.role.replace("_", " ")}{user.canPublish ? " · publisher" : ""}</p>
                 <form action={signOut}>
                   <button className="mt-2 underline">Sign out</button>
                 </form>
               </div>
             </aside>
-            <main className="min-w-0 flex-1 px-8 py-6">{children}</main>
+            <main className="min-w-0 flex-1 px-8 py-8">{children}</main>
           </div>
         ) : (
           children
@@ -81,7 +87,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
 function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
-    <Link href={href} className="block rounded px-2 py-1 text-neutral-700 hover:bg-neutral-100">
+    <Link href={href} className="block rounded-md px-2 py-1 text-fg-2 transition hover:bg-bg-3 hover:text-lime">
       {children}
     </Link>
   );

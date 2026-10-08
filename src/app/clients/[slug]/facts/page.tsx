@@ -40,7 +40,7 @@ export default async function FactsPage({ params, searchParams }: { params: Prom
         actions={
           <div className="flex gap-1 text-xs">
             {["", "proposed", "verified", "approved", "stale"].map((s) => (
-              <a key={s} href={`?${s ? `status=${s}` : ""}`} className={`rounded-full px-2.5 py-1 ring-1 ring-inset ${filter === s || (!filter && !s) ? "bg-neutral-900 text-white ring-neutral-900" : "ring-neutral-300"}`}>
+              <a key={s} href={`?${s ? `status=${s}` : ""}`} className={`mono rounded-full px-2.5 py-1 uppercase tracking-[0.08em] ring-1 ring-inset ${filter === s || (!filter && !s) ? "bg-lime text-bg ring-lime" : "text-fg-2 ring-line hover:ring-fg-muted"}`}>
                 {s || "all"}
               </a>
             ))}
