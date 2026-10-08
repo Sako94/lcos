@@ -16,7 +16,15 @@ export const dynamic = "force-dynamic";
 async function signOut() {
   "use server";
   const store = await cookies();
-  store.delete(devCookieName);
+  if ((process.env.AUTH_MODE ?? "dev") === "supabase") {
+    const { createServerClient } = await import("@supabase/ssr");
+    const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+      cookies: { getAll: () => store.getAll(), setAll: (all) => all.forEach(({ name, value, options }) => store.set(name, value, options)) },
+    });
+    await supabase.auth.signOut();
+  } else {
+    store.delete(devCookieName);
+  }
   redirect("/login");
 }
 

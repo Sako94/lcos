@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { withService } from "@/lib/db";
 import { devCookieName, getCurrentUser } from "@/lib/auth";
+import { SupabaseLogin } from "./supabase-login";
 
 export const dynamic = "force-dynamic";
 
@@ -48,10 +49,7 @@ export default async function LoginPage() {
           ))}
         </form>
       ) : (
-        <p className="mt-6 text-sm text-neutral-600">
-          Sign in through Supabase Auth. Configure NEXT_PUBLIC_SUPABASE_URL and the anon key, then use the
-          hosted sign-in page or magic link; this app reads the session cookie.
-        </p>
+        <SupabaseLogin url={process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""} anonKey={process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ""} />
       )}
     </main>
   );
