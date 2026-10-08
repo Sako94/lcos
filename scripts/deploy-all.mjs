@@ -122,7 +122,7 @@ const fixed = {
 const users = await runSql(`select id, email from auth.users where email in (${Object.values(fixed).map((e) => `'${e}'`).join(",")})`);
 const alreadySeeded = (await runSql(`select count(*)::int as n from public.sops`))[0]?.n > 0;
 if (alreadySeeded) console.log("  seed already present; skipping");
-else for (const file of ["supabase/seed/0001_agency.sql", "supabase/seed/0002_atrakt.sql"]) {
+else for (const file of readdirSync("supabase/seed").filter((f) => f.endsWith(".sql")).sort().map((f) => `supabase/seed/${f}`)) {
   let text = readFileSync(file, "utf8");
   for (const [k, email] of Object.entries(fixed)) {
     const real = users.find((u) => u.email === email)?.id;

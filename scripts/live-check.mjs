@@ -17,7 +17,7 @@ await page.waitForURL(`${base}/`, { timeout: 30000 });
 check("signed in with Supabase", await page.getByRole("heading", { name: "Agency home" }).isVisible());
 await page.goto(`${base}/clients/atrakt/facts`);
 const n = await page.locator("li.py-3").count();
-check("atrakt facts loaded", n === 44, `(${n})`);
+check("atrakt facts loaded", n === 64, `(${n})`);
 await page.goto(`${base}/clients/atrakt/audit`);
 check("audit page renders", await page.getByText("/100 weighted").isVisible());
 if (process.env.RUN_HEALTH === "1") {

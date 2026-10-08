@@ -9,6 +9,11 @@ export function klaviyoKey(slug: string): string | null {
   return process.env[`KLAVIYO_API_KEY__${slug}`] ?? null;
 }
 
+export function shopifyAdmin(slug: string): { store: string; token: string } | null {
+  const store = process.env[`SHOPIFY_STORE__${slug}`], token = process.env[`SHOPIFY_ADMIN_TOKEN__${slug}`];
+  return store && token ? { store, token } : null;
+}
+
 export function clickupToken(): string | null {
   return process.env.CLICKUP_API_TOKEN ?? null;
 }

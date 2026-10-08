@@ -40,7 +40,7 @@ select pg_temp.check('outsider still reads the agency playbook', (select count(*
 -- 2. assigned lead sees the client
 select pg_temp.as_user(:'drew');
 select pg_temp.check('drew sees atrakt', (select count(*) from public.clients) = 1);
-select pg_temp.check('drew sees 44 facts', (select count(*) from public.facts) = 44);
+select pg_temp.check('drew sees 64 facts', (select count(*) from public.facts) = 64);
 
 -- 3. role rules on facts
 select pg_temp.check('drew cannot approve an offers fact',
@@ -58,7 +58,7 @@ select pg_temp.check('sako approved the offers fact', (select status = 'approved
 
 -- 4. contributor limits
 select pg_temp.as_user(:'andre');
-select pg_temp.check('andre sees atrakt facts (assigned)', (select count(*) from public.facts) = 44);
+select pg_temp.check('andre sees atrakt facts (assigned)', (select count(*) from public.facts) = 64);
 select pg_temp.check('andre cannot verify a fact',
   pg_temp.fails('update public.facts set status = ''verified'' where status = ''proposed'' and category = ''customer_audience'''));
 select pg_temp.check('andre cannot change rebuild status',

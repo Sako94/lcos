@@ -30,7 +30,7 @@ await shot(page, "02-client-overview");
 
 await page.goto(`${base}/clients/atrakt/facts`);
 const factsBefore = await page.locator("li.py-3").count();
-check("facts page lists 44 facts", factsBefore === 44, `(${factsBefore})`);
+check("facts page lists 64 facts", factsBefore === 64, `(${factsBefore})`);
 await shot(page, "03-facts");
 // verify a proposed product fact as Drew
 const debo = page.locator("li.py-3", { hasText: "Debo (debloat powder)" });
