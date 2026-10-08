@@ -6,6 +6,8 @@ import { Card, Chip, Empty, PageHeader, btnPrimary, btnSecondary, fmtDate, input
 import { ActionButton, ActionForm } from "@/components/action-form";
 import { addCommitment, addDecision, draftPreread, setCommitmentStatus, teamForClient, updateMeeting } from "../actions";
 
+export const maxDuration = 300;
+
 export default async function MeetingPage({ params }: { params: Promise<{ slug: string; id: string }> }) {
   const { slug, id } = await params;
   const user = await requireUser();

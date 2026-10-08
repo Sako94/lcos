@@ -14,6 +14,8 @@ type Brief = {
 };
 type Copy = { id: string; version: number; subjectLines: string[]; previewText: string | null; body: string | null; smsBody: string | null; factIds: string[]; createdByKind: string; createdBy: string | null; agentRunId: string | null; createdAt: string };
 
+export const maxDuration = 300;
+
 export default async function BriefPage({ params }: { params: Promise<{ slug: string; id: string }> }) {
   const { slug, id } = await params;
   const user = await requireUser();

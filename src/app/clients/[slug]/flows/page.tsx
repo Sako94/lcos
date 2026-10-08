@@ -7,6 +7,8 @@ import { draftFlowLogic, proposeChange, setChangeStatus, syncFlows, updateFlow }
 
 const STANDARD_JOURNEY = ["welcome", "browse", "cart", "checkout", "post-purchase", "second purchase", "replenishment", "winback", "sunset", "back in stock", "vip", "subscription onboarding"];
 
+export const maxDuration = 300;
+
 export default async function FlowsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const user = await requireUser();

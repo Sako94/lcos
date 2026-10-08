@@ -79,7 +79,7 @@ export async function runJob(opts: { clientId: string; jobType: JobType; request
       return { ok: true as const, runId, summary: result.summary };
     } catch (e) {
       lastError = e instanceof Error ? e.message : String(e);
-      const retryable = !/not set|not configured|Unknown|cannot|requires|forbidden/i.test(lastError);
+      const retryable = !/not set|not configured|Unknown|cannot|requires|forbidden|throttled|429/i.test(lastError);
       await withService((tx) => tx`update public.agent_runs set attempt = ${attempt}, error = ${lastError} where id = ${runId}`);
       if (!retryable || attempt === MAX_ATTEMPTS) break;
       await new Promise((r) => setTimeout(r, 500 * 2 ** (attempt - 1)));

@@ -5,9 +5,17 @@
 // Optional: SUPABASE_ORG_ID, SUPABASE_PROJECT_REF (reuse), SUPABASE_REGION (default us-west-1), CLICKUP_API_TOKEN,
 //           ANTHROPIC_API_KEY, VERCEL_SCOPE (team slug), APP_NAME (default wavy-lcos)
 // Nothing here is logged except the final URL and the one-time sign-in passwords.
-import { execSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
+
+// Honor HTTPS_PROXY for fetch (corporate egress proxies)
+if (process.env.HTTPS_PROXY || process.env.https_proxy) {
+  try {
+    const { EnvHttpProxyAgent, setGlobalDispatcher } = await import("undici");
+    setGlobalDispatcher(new EnvHttpProxyAgent());
+  } catch { /* undici not installed: direct fetch */ }
+}
 
 const need = (k) => { const v = process.env[k]; if (!v) { console.error(`Missing ${k}`); process.exit(1); } return v; };
 const SB = need("SUPABASE_ACCESS_TOKEN");
@@ -48,17 +56,39 @@ const anon = keys.find((k) => k.name === "anon")?.api_key;
 const service = keys.find((k) => k.name === "service_role")?.api_key;
 if (!anon || !service) throw new Error("Could not read API keys");
 const supabaseUrl = `https://${ref}.supabase.co`;
-if (!dbPass) throw new Error("Set SUPABASE_DB_PASSWORD when reusing a project");
+if (!dbPass) {
+  dbPass = pw() + pw();
+  console.log("Resetting database password for the reused project…");
+  await sbApi(`/projects/${ref}/database/password`, { method: "PATCH", body: JSON.stringify({ password: dbPass }) });
+}
 const pooler = await sbApi(`/projects/${ref}/config/database/pooler`).catch(() => null);
 const session = Array.isArray(pooler) ? pooler.find((x) => x.pool_mode === "session") ?? pooler[0] : null;
 const dbUrl = session
   ? `postgres://${session.db_user}:${encodeURIComponent(dbPass)}@${session.db_host}:${session.db_port}/${session.db_name ?? "postgres"}`
   : `postgres://postgres:${encodeURIComponent(dbPass)}@db.${ref}.supabase.co:5432/postgres`;
 
+// SQL runner: direct Postgres when reachable, otherwise the Supabase Management API query endpoint (HTTPS).
+const runSql = async (query) => {
+  if (process.env.SB_DIRECT === "1") {
+    const postgres = (await import("postgres")).default;
+    const sql = postgres(dbUrl, { max: 1, prepare: false });
+    try { return await sql.unsafe(query); } finally { await sql.end(); }
+  }
+  return sbApi(`/projects/${ref}/database/query`, { method: "POST", body: JSON.stringify({ query }) });
+};
+
 // ---------- 2. migrations ----------
 console.log("Applying migrations…");
-let r = spawnSync("node", ["scripts/migrate-remote.mjs"], { stdio: "inherit", env: { ...process.env, DATABASE_URL: dbUrl } });
-if (r.status !== 0) process.exit(1);
+await runSql(`create table if not exists public._lcos_migrations (name text primary key, applied_at timestamptz not null default now())`);
+const applied = new Set((await runSql(`select name from public._lcos_migrations`)).map((r) => r.name));
+for (const f of readdirSync("supabase/migrations").filter((x) => x.endsWith(".sql")).sort()) {
+  if (applied.has(f)) { console.log("  skip", f); continue; }
+  await runSql(readFileSync(`supabase/migrations/${f}`, "utf8") + `\ninsert into public._lcos_migrations (name) values ('${f}');`);
+  console.log("  applied", f);
+}
+await runSql(`grant usage on schema app to authenticated, service_role; grant execute on all functions in schema app to authenticated, service_role;
+  grant all on all tables in schema public to authenticated, service_role; grant usage, select on all sequences in schema public to authenticated, service_role;
+  revoke all on public.integration_secrets from authenticated;`);
 
 // ---------- 3. team users ----------
 const team = [
@@ -79,17 +109,30 @@ for (const u of team) {
   if (res.ok) passwords.push({ email: u.email, password });
   else if (!/already|exists/i.test(JSON.stringify(body))) throw new Error(`User create failed for ${u.email}: ${JSON.stringify(body).slice(0, 200)}`);
 }
-{
-  const postgres = (await import("postgres")).default;
-  const sql = postgres(dbUrl, { max: 1, prepare: false });
-  for (const u of team) await sql`update public.profiles set role = ${u.role}, full_name = ${u.name} where email = ${u.email}`;
-  await sql.end();
-}
+for (const u of team) await runSql(`update public.profiles set role = '${u.role}', full_name = '${u.name.replace(/'/g, "''")}' where email = '${u.email}'`);
 
-// ---------- 4. seed ----------
+// ---------- 4. seed (map fixed local ids to real auth ids by email) ----------
 console.log("Seeding agency + Atrakt…");
-r = spawnSync("node", ["scripts/seed-remote.mjs"], { stdio: "inherit", env: { ...process.env, DATABASE_URL: dbUrl } });
-if (r.status !== 0) process.exit(1);
+const fixed = {
+  "00000000-0000-4000-8000-000000000001": "sako@wavystudios.com",
+  "00000000-0000-4000-8000-000000000002": "drew@wavystudios.com",
+  "00000000-0000-4000-8000-000000000003": "andre@wavystudios.com",
+  "00000000-0000-4000-8000-000000000004": "jeanclaude@wavystudios.com",
+};
+const users = await runSql(`select id, email from auth.users where email in (${Object.values(fixed).map((e) => `'${e}'`).join(",")})`);
+const alreadySeeded = (await runSql(`select count(*)::int as n from public.sops`))[0]?.n > 0;
+if (alreadySeeded) console.log("  seed already present; skipping");
+else for (const file of ["supabase/seed/0001_agency.sql", "supabase/seed/0002_atrakt.sql"]) {
+  let text = readFileSync(file, "utf8");
+  for (const [k, email] of Object.entries(fixed)) {
+    const real = users.find((u) => u.email === email)?.id;
+    if (!real) throw new Error(`No auth user for ${email}`);
+    text = text.replaceAll(k, real);
+  }
+  text = text.replace(/,\s*\('00000000-0000-4000-8000-000000000009'[^\n]*\n/, "\n");
+  await runSql(text);
+  console.log("  seeded", file);
+}
 
 // ---------- 5. Vercel ----------
 const cronSecret = pw() + pw();
@@ -116,7 +159,7 @@ const envs = {
 for (const [k, v] of Object.entries(envs)) {
   if (!v) continue;
   spawnSync("npx", ["--yes", "vercel@latest", "env", "rm", k, "production", "--yes", "--token", VC, ...scope], { encoding: "utf8" });
-  vercel(["env", "add", k, "production"], v + "\n");
+  vercel(["env", "add", k, "production", "--type", k.startsWith("NEXT_PUBLIC_") ? "config" : "secret", "--yes"], v + "\n");
 }
 console.log("Deploying to Vercel (production)…");
 const out = vercel(["deploy", "--prod", "--yes"]);

@@ -38,15 +38,14 @@ export async function healthReview(ctx: JobContext): Promise<JobResult> {
   const metricId = await k.placedOrderMetricId();
   if (!metricId) throw new Error("No 'Placed Order' metric in this Klaviyo account; cannot compute conversions");
 
-  const [flow7, flow30, flow90, camp30] = await Promise.all([
-    k.flowReport({ key: "last_7_days" }, metricId),
-    k.flowReport({ key: "last_30_days" }, metricId),
-    k.flowReport({ key: "last_90_days" }, metricId),
-    k.campaignReport({ key: "last_30_days" }, metricId),
-  ]);
-  const byFlow7 = agg(flow7, (r) => r.groupings.flow_id);
+  // Klaviyo reporting endpoints allow only a few calls per minute: two sequential calls per run.
+  const flow30 = await k.flowReport({ key: "last_30_days" }, metricId);
+  const camp30 = await k.campaignReport({ key: "last_30_days" }, metricId);
   const byFlow30 = agg(flow30, (r) => r.groupings.flow_id);
-  const byFlow90 = agg(flow90, (r) => r.groupings.flow_id);
+  // period-over-period comes from our own last health review snapshot, not a third API call
+  const prev = (await ctx.tx<{ outputs: { perFlow?: Record<string, { recipients: number; conversions: number }> } }[]>`
+    select r.outputs from public.agent_runs r where r.client_id = ${ctx.clientId} and r.job_type = 'health_review' and r.status = 'succeeded'
+    and r.id <> ${ctx.runId} order by r.created_at desc limit 1`)[0]?.outputs?.perFlow ?? {};
   const all30 = agg([...flow30, ...camp30], () => "all").get("all")!;
   const flowsAll30 = agg(flow30, () => "all").get("all") ?? all30;
   const campsAll30 = agg(camp30, () => "all").get("all");
@@ -57,17 +56,19 @@ export async function healthReview(ctx: JobContext): Promise<JobResult> {
   const findings: { area: string; title: string; detail: string; severity: number; confidence: "low" | "medium" | "high"; impact: number; effort: number; next: string }[] = [];
   const ev = `https://www.klaviyo.com/analytics/reports`;
 
-  // Rule: live flow with zero sends in 7 days
-  for (const f of flows.filter((f) => f.externalStatus === "live")) {
-    const a7 = byFlow7.get(f.externalId);
-    if (!a7 || a7.recipients === 0) {
-      findings.push({ area: "flows", title: `Live flow "${f.name}" sent nothing in the last 7 days`, detail: "A live flow with no recipients usually means a broken trigger, an empty audience, or a filter that excludes everyone.", severity: 2, confidence: "high", impact: 3, effort: 2, next: `Open the flow in Klaviyo and check trigger, filters, and recent events` });
+  // Rule: live flow with zero sends in 30 days; placed-order rate below half of the previous review's rate
+  const isUtility = (name: string) => /\b(track|sync|update)\b/i.test(name); // profile-property flows that never send
+  for (const f of flows.filter((f) => f.externalStatus === "live" && !isUtility(f.name))) {
+    const a30 = byFlow30.get(f.externalId);
+    if (!a30 || a30.recipients === 0) {
+      findings.push({ area: "flows", title: `Live flow "${f.name}" sent nothing in the last 30 days`, detail: "A live flow with no recipients usually means a broken trigger, an empty audience, or a filter that excludes everyone.", severity: 2, confidence: "high", impact: 3, effort: 2, next: `Open the flow in Klaviyo and check trigger, filters, and recent events` });
+      continue;
     }
-    const a30 = byFlow30.get(f.externalId), a90 = byFlow90.get(f.externalId);
-    if (a30 && a90 && a30.recipients >= 50 && a90.recipients >= 150) {
-      const c30 = rate(a30.conversions, a30.recipients), c90 = rate(a90.conversions, a90.recipients);
-      if (c90 > 0 && c30 < c90 / 2) {
-        findings.push({ area: "flows", title: `"${f.name}" placed-order rate fell to ${(c30 * 100).toFixed(2)}% (90-day avg ${(c90 * 100).toFixed(2)}%)`, detail: "Rate is below half its 90-day average over the last 30 days.", severity: 2, confidence: "medium", impact: 4, effort: 3, next: "Check offer, links, and audience changes in the flow; compare message-level stats" });
+    const p = prev[f.externalId];
+    if (p && a30.recipients >= 50 && p.recipients >= 50) {
+      const cNow = rate(a30.conversions, a30.recipients), cPrev = rate(p.conversions, p.recipients);
+      if (cPrev > 0 && cNow < cPrev / 2) {
+        findings.push({ area: "flows", title: `"${f.name}" placed-order rate fell to ${(cNow * 100).toFixed(2)}% (previous review ${(cPrev * 100).toFixed(2)}%)`, detail: "Rate is below half of the last health review's rate.", severity: 2, confidence: "medium", impact: 4, effort: 3, next: "Check offer, links, and audience changes in the flow; compare message-level stats" });
       }
     }
   }
@@ -120,6 +121,7 @@ export async function healthReview(ctx: JobContext): Promise<JobResult> {
         flowShareOfRevenue: flowShare, campaignCount, liveFlows: flows.filter((f) => f.externalStatus === "live").length,
       },
       scores,
+      perFlow: Object.fromEntries([...byFlow30].map(([id, a]) => [id, { recipients: a.recipients, conversions: a.conversions, revenue: a.revenue }])),
       candidateFindings: findings.map((f) => f.title),
     },
   };

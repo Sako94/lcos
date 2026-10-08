@@ -11,7 +11,7 @@ export type Timeframe = { key: "last_7_days" | "last_30_days" | "last_90_days" |
 export class KlaviyoClient {
   constructor(private apiKey: string) {}
 
-  private async req<T>(path: string, init?: RequestInit): Promise<T> {
+  private async req<T>(path: string, init?: RequestInit, attempt = 0): Promise<T> {
     const res = await fetch(`${BASE}${path}`, {
       ...init,
       headers: {
@@ -23,6 +23,14 @@ export class KlaviyoClient {
       },
       cache: "no-store",
     });
+    if (res.status === 429 && attempt < 2) {
+      // reporting endpoints are limited to a few calls per minute; wait the time Klaviyo states (capped at 65s)
+      const text = await res.text().catch(() => "");
+      const m = text.match(/available in (\d+) seconds/);
+      const wait = Math.min(65, Number(res.headers.get("retry-after") ?? m?.[1] ?? 20)) * 1000 + 500;
+      await new Promise((r) => setTimeout(r, wait));
+      return this.req<T>(path, init, attempt + 1);
+    }
     if (!res.ok) {
       const text = await res.text().catch(() => "");
       throw new Error(`Klaviyo ${res.status} on ${path}: ${text.slice(0, 300)}`);

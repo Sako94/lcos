@@ -7,6 +7,8 @@ import { runJob, type JobType } from "@/lib/agent/runner";
  * Body (optional): { jobType?: string, clientId?: string }. Without a body it runs every enabled scheduled job
  * for every active client, once per day each (idempotency key = job:client:date).
  */
+export const maxDuration = 300;
+
 export async function POST(req: Request) {
   if (req.headers.get("x-cron-secret") !== process.env.CRON_SECRET) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const body = (await req.json().catch(() => ({}))) as { jobType?: JobType; clientId?: string };

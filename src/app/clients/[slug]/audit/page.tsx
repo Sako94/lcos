@@ -12,6 +12,8 @@ type Finding = {
   impact: number | null; effort: number | null; status: string; nextAction: string | null; createdByKind: string; agentRunId: string | null; createdAt: string; dismissReason: string | null;
 };
 
+export const maxDuration = 300;
+
 export default async function AuditPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const user = await requireUser();
