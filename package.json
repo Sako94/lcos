@@ -6,12 +6,20 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:db": "scripts/db-reset-local.sh >/dev/null && su postgres -c \"psql -v ON_ERROR_STOP=1 -d lcos_dev -f supabase/tests/rls_and_rules.sql\" | grep -E \"PASS|FAIL\"",
+    "test:e2e": "scripts/db-reset-local.sh >/dev/null && CHROMIUM_PATH=${CHROMIUM_PATH:-/opt/pw-browsers/chromium} node scripts/smoke.mjs",
+    "db:reset": "scripts/db-reset-local.sh"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.132.0",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.117.3",
     "next": "16.4.0",
+    "postgres": "^3.4.9",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
@@ -20,7 +28,9 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.0",
+    "playwright": "^1.64.0",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }

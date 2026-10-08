@@ -1,36 +1,64 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Wavy LCOS — Lifecycle Client Operating System
 
-## Getting Started
+Internal workspace for Wavy Studios' lifecycle (email/SMS) team. One client, one two-week cycle, with the AI agent working on the same records as the team and never past "in review".
 
-First, run the development server:
+Stack: Next.js 16 (App Router, server actions) · Postgres with row-level security (Supabase-compatible) · `postgres` driver · Anthropic SDK for drafts · Playwright for end-to-end checks.
+
+## What is in the MVP
+
+| Screen | Path | Does |
+| --- | --- | --- |
+| Agency Home | `/` | Approval queue, new findings, overdue tasks, open commitments, meetings, recent agent runs |
+| Client Overview | `/clients/[slug]` | Objective, current cycle, scorecard, integration status (connected / pending / upload / link), open client dependencies |
+| Source of Truth | `/clients/[slug]/facts` | Facts by category with Proposed → Verified → Approved → Stale, sources, versions; admin approves sensitive categories |
+| Audit | `/clients/[slug]/audit` | Weighted 8-area audit template, findings with confirm / promote / dismiss, "Run health review now" |
+| Flows | `/clients/[slug]/flows` | Klaviyo inventory (read-only sync), documented logic, rebuild status, proposed changes with approve → apply (publish permission) → verify |
+| Calendar & briefs | `/clients/[slug]/calendar`, `/briefs/[id]` | Cycles, slots, briefs, immutable copy versions, QA checklist, admin approval on a version, client approval evidence |
+| Meetings | `/clients/[slug]/meetings/[id]` | Pre-read (agent draft), decisions, commitments with owner + due date mirrored to ClickUp |
+| Playbook | `/playbook` | 22 SOP records (9 MVP ones in full) and the audit template |
+| Agent activity | `/agent`, `/agent/runs/[id]` | Jobs, run log with inputs/outputs/records touched, actions awaiting approval |
+
+Rules the database enforces (see `supabase/migrations/0002_rls.sql` and `supabase/tests/rls_and_rules.sql`): client isolation by assignment; contributors cannot approve or change status; admins approve sensitive facts, cycle plans, and briefs; approval is on a copy version and a content edit resets it; copy versions are immutable; the agent can only create Proposed facts, New findings, drafts, and copy that cites Approved facts; applying a live flow change needs the separate `can_publish` flag (nobody has it in the MVP); duplicate agent runs are blocked by an idempotency key.
+
+## Run locally
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local            # AUTH_MODE=dev, DATABASE_URL to a local Postgres
+scripts/db-reset-local.sh             # migrations + auth stub + seed (Atrakt, team, SOPs)
+npm install && npm run dev            # http://localhost:3000 — pick a seeded team member to sign in
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Checks:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run test:db      # 35 RLS and rule checks against a fresh database
+npm run build && npm run start &
+npm run test:e2e     # 22 Playwright checks across every screen and role
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Deploy on Supabase + Vercel (or any Node host)
 
-## Learn More
+1. Create a Supabase project. Run `supabase/migrations/*.sql` in order (SQL editor or `supabase db push`). Do **not** run anything in `supabase/local/`.
+2. Create the team users in Supabase Auth (email + password or magic link). The `handle_new_user` trigger creates a profile as `contributor`; set roles in `public.profiles` (`admin` for Sako, `account_lead` for Drew and JeanClaude). Then run `supabase/seed/0001_agency.sql` and `0002_atrakt.sql` after replacing the fixed user ids with the real `auth.users` ids (search for `00000000-0000-4000-8000-00000000000`).
+3. Environment: `DATABASE_URL` = the project's Postgres connection string (the app sets `request.jwt.claim.sub` per request, which Supabase's `auth.uid()` reads); `AUTH_MODE=supabase` with the project URL and anon key; `KLAVIYO_API_KEY__atrakt` (read-only private key); `CLICKUP_API_TOKEN` and `CLICKUP_LIST_ID__atrakt`; `ANTHROPIC_API_KEY` (optional — without it the agent produces deterministic templates and says so); `CRON_SECRET`.
+4. Schedule `POST /api/jobs/run` with header `x-cron-secret` daily (Vercel Cron, Supabase cron, GitHub Actions). It runs every enabled scheduled job once per client per day.
 
-To learn more about Next.js, take a look at the following resources:
+Credentials live only in environment variables; `public.integration_secrets` holds references, never tokens, and has no RLS policies (service role only).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Layout
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+supabase/migrations/   schema, RLS + triggers, auth hook, audit functions
+supabase/seed/         agency (profiles, SOPs, audit template) and Atrakt (facts, flows, audit, findings, jobs)
+supabase/local/        Postgres-only stand-ins for Supabase auth (never deploy)
+supabase/tests/        SQL rule tests
+src/lib/db.ts          withUser (RLS as the signed-in user) · withAgent (service role, app.actor=agent) · withService
+src/lib/agent/         runner (idempotency, retries, run log, failure task) and jobs
+src/lib/integrations/  Klaviyo (read-only), ClickUp (task mirror), secrets (env only)
+src/app/               screens and server actions
+scripts/               db-reset-local.sh, smoke.mjs
+```
 
-## Deploy on Vercel
+## Not in the MVP
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Sending, editing live flows or segments, suppressing profiles, client logins, One Text API, Shopify reads (connector pending), automated reporting emails, Fireflies auto-import. All are designed into the schema (see the PRD) and gated behind approval records.
