@@ -54,6 +54,19 @@ export async function withAgent<T>(clientId: string, fn: (tx: Tx) => Promise<T>)
   }) as Promise<T>;
 }
 
+/**
+ * A client using a private onboarding link (no login). Reads are scoped by the token in the calling code;
+ * every write goes through the app.onboarding_* database functions, which check the token, status and expiry.
+ */
+export async function withClientLink<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return sql.begin(async (tx) => {
+    await tx.unsafe(`set local role service_role`);
+    await tx`select set_config('request.jwt.claim.sub', '', true)`;
+    await tx`select set_config('app.actor', 'client', true)`;
+    return fn(tx as Tx);
+  }) as Promise<T>;
+}
+
 /** Service-role access for system work that is not on behalf of a user (job scheduling, integration status). */
 export async function withService<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
   return sql.begin(async (tx) => {

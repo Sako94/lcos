@@ -66,3 +66,12 @@ export async function draftFlowLogic(slug: string, clientId: string, flowId: str
   revalidatePath(`/clients/${slug}/flows`);
   return r.ok ? { ok: true } : { ok: false, error: r.error };
 }
+
+export async function runLinkCheck(slug: string, clientId: string): Promise<ActionResult> {
+  const user = await requireUser();
+  if (user.role === "contributor") return { ok: false, error: "Contributors cannot run agent jobs" };
+  const r = await runJob({ clientId, jobType: "link_check", requestedBy: user.id });
+  revalidatePath(`/clients/${slug}/flows`);
+  revalidatePath(`/clients/${slug}/audit`);
+  return r.ok ? { ok: true } : { ok: false, error: r.error };
+}

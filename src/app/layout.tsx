@@ -53,16 +53,22 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   <p className="label mb-1">Agency</p>
                   <NavLink href="/">Home</NavLink>
                   <NavLink href="/playbook">Playbook</NavLink>
+                  <NavLink href="/playbook/metrics">Metric dictionary</NavLink>
                   <NavLink href="/agent">Agent activity</NavLink>
                 </div>
                 {clients.map((c) => (
                   <div key={c.id}>
                     <p className="label mb-1">{c.name}</p>
                     <NavLink href={`/clients/${c.slug}`}>Overview</NavLink>
+                    <NavLink href={`/clients/${c.slug}/onboarding`}>Onboarding</NavLink>
                     <NavLink href={`/clients/${c.slug}/facts`}>Source of Truth</NavLink>
                     <NavLink href={`/clients/${c.slug}/audit`}>Audit</NavLink>
                     <NavLink href={`/clients/${c.slug}/flows`}>Flows</NavLink>
                     <NavLink href={`/clients/${c.slug}/calendar`}>Calendar & briefs</NavLink>
+                    <NavLink href={`/clients/${c.slug}/journeys`}>Target journeys</NavLink>
+                    <NavLink href={`/clients/${c.slug}/experiments`}>Experiments</NavLink>
+                    <NavLink href={`/clients/${c.slug}/decisions`}>Decisions</NavLink>
+                    <NavLink href={`/clients/${c.slug}/strategy`}>Strategy</NavLink>
                     <NavLink href={`/clients/${c.slug}/meetings`}>Meetings</NavLink>
                   </div>
                 ))}

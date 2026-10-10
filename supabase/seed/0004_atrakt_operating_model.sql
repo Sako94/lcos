@@ -1,0 +1,19 @@
+-- Atrakt: target journey skeleton (seven stages, all Proposed, no steps yet) and the open decision register.
+-- Decisions below are the inputs Wavy has already asked the client for; nothing here is a client fact.
+insert into public.journeys (id, client_id, stage, name, purpose, entry_condition, exit_condition, sort_order) values
+ ('a1000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'capture', 'Capture & choose', 'Understand intent, earn permission, record the promise.', 'Eligible new visitor opens a capture form', 'Consent recorded with the accepted benefit and interest', 1),
+ ('a1000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000001', 'welcome', 'Welcome & first purchase', 'Honor the promise, help choose, answer one real buying question.', 'One verified welcome enrollment (email list or SMS list, one owner per person)', 'First order, opt-out, or end of the bounded sequence', 2),
+ ('a1000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000001', 'recover_intent', 'Recover intent', 'Browse, cart and checkout recovery without conflicting offers.', 'Viewed product, added to cart, or started checkout without ordering', 'Order placed or 7 days elapsed', 3),
+ ('a1000000-0000-4000-8000-000000000004', '10000000-0000-4000-8000-000000000001', 'deliver_routine', 'Deliver & build the routine', 'Shipping truth, how to use, first-week support.', 'Order placed', 'Delivered plus product-use window', 4),
+ ('a1000000-0000-4000-8000-000000000005', '10000000-0000-4000-8000-000000000001', 'second_purchase', 'Earn the second purchase', 'Readiness-based replenishment and the next relevant product.', 'Delivered order, no open service case', 'Second order or subscription start', 5),
+ ('a1000000-0000-4000-8000-000000000006', '10000000-0000-4000-8000-000000000001', 'retain_reconnect', 'Retain & reconnect', 'Lapsed-buyer winback and sunset.', 'No order in the product-duration window', 'Order, re-engagement, or sunset suppression', 6),
+ ('a1000000-0000-4000-8000-000000000007', '10000000-0000-4000-8000-000000000001', 'advocacy', 'Learn & earn advocacy', 'Reviews, referrals, preference capture.', 'Second delivered order', 'Review or referral recorded', 7)
+on conflict (id) do nothing;
+
+insert into public.decisions (id, client_id, statement, status, owner_side, owner_role, unlocks, due_on, recorded_by) values
+ ('d1000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'Approve one welcome entitlement (what a new subscriber is promised) and its terms', 'open', 'client', 'Client commercial owner', 'Welcome flow rebuild, browse-abandon offer alignment, welcome copy', '2026-10-17', '00000000-0000-4000-8000-000000000001'),
+ ('d1000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000001', 'Provide certification and testing documents behind product claims', 'open', 'client', 'Client product owner', 'Approval of the claims list; any copy that cites a claim', '2026-10-17', '00000000-0000-4000-8000-000000000001'),
+ ('d1000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000001', 'Share brand assets, Figma files and the product roadmap', 'open', 'client', 'Client marketing owner', 'Design system (SOP 14), launch slots on the calendar', '2026-10-17', '00000000-0000-4000-8000-000000000001'),
+ ('d1000000-0000-4000-8000-000000000004', '10000000-0000-4000-8000-000000000001', 'Grant Shopify app permission or install the LCOS custom app', 'open', 'client', 'Store owner', 'Order history import, repeat-rate and cohort facts, revenue reconciliation', '2026-10-24', '00000000-0000-4000-8000-000000000001'),
+ ('d1000000-0000-4000-8000-000000000005', '10000000-0000-4000-8000-000000000001', 'Confirm the domain list every email may link to', 'open', 'agency', 'Account Lead', 'Nightly link check runs against the approved list instead of a default', '2026-10-10', '00000000-0000-4000-8000-000000000001')
+on conflict (id) do nothing;

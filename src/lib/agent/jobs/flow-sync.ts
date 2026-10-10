@@ -8,6 +8,7 @@ export async function flowSync(ctx: JobContext): Promise<JobResult> {
   if (!key) throw new Error(`Klaviyo API key for ${ctx.slug} is not set (KLAVIYO_API_KEY__${ctx.slug})`);
   const k = new KlaviyoClient(key);
   const flows = await k.flows();
+  const snapshotId = await ctx.snapshot({ sourceSystem: "klaviyo", kind: "flow_inventory", payload: { flows }, rowCount: flows.length });
   let upserts = 0;
   for (const f of flows) {
     await ctx.tx`
@@ -19,5 +20,5 @@ export async function flowSync(ctx: JobContext): Promise<JobResult> {
     upserts++;
   }
   await ctx.tx`update public.integrations set status = 'connected', last_verified_at = now() where client_id = ${ctx.clientId} and system = 'klaviyo'`;
-  return { summary: `Synced ${upserts} flows from Klaviyo`, outputs: { count: upserts } };
+  return { summary: `Synced ${upserts} flows from Klaviyo`, outputs: { count: upserts, snapshotId } };
 }

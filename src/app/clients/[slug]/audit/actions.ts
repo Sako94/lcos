@@ -11,6 +11,7 @@ const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 export async function setFindingStatus(slug: string, findingId: string, status: "confirmed" | "dismissed" | "promoted", formData?: FormData): Promise<ActionResult> {
   const user = await requireUser();
   const reason = formData ? String(formData.get("dismiss_reason") ?? "") : "";
+  const readout = formData ? String(formData.get("next_readout") ?? "").trim() : "";
   try {
     await withUser(user.id, async (tx) => {
       if (status === "promoted") {
@@ -18,7 +19,7 @@ export async function setFindingStatus(slug: string, findingId: string, status: 
         const t = await tx<{ id: string }[]>`
           insert into public.tasks (client_id, title, description, owner_id, status, linked_type, linked_id)
           values (${f.clientId}, ${f.title}, ${f.nextAction}, ${user.id}, 'todo', 'finding', ${findingId}) returning id`;
-        await tx`update public.findings set status = 'promoted' where id = ${findingId}`;
+        await tx`update public.findings set status = 'promoted', next_readout = coalesce(${readout || null}, next_readout) where id = ${findingId}`;
         return t[0].id;
       }
       await tx`update public.findings set status = ${status}::app.finding_status, dismiss_reason = ${reason || null} where id = ${findingId}`;

@@ -5,6 +5,7 @@ const BASE = "https://a.klaviyo.com/api";
 const REVISION = "2025-07-15";
 
 export type KlaviyoFlow = { id: string; name: string; status: string; trigger_type: string | null; archived: boolean; updated: string };
+export type KlaviyoFlowMessage = { id: string; name: string; channel: string; content: Record<string, string | null>; updated: string };
 export type ReportRow = { groupings: Record<string, string>; statistics: Record<string, number | null> };
 export type Timeframe = { key: "last_7_days" | "last_30_days" | "last_90_days" | "last_month" | "this_month" };
 
@@ -57,6 +58,24 @@ export class KlaviyoClient {
   async flowActions(flowId: string): Promise<{ id: string; action_type: string; settings: unknown }[]> {
     const r = await this.req<{ data: { id: string; attributes: { action_type: string; settings: unknown } }[] }>(`/flows/${flowId}/flow-actions`);
     return r.data.map((d) => ({ id: d.id, ...d.attributes }));
+  }
+
+  /** Messages inside one flow action (email/SMS content without the template body). */
+  async flowActionMessages(actionId: string): Promise<KlaviyoFlowMessage[]> {
+    const r = await this.req<{ data: { id: string; attributes: { name: string; channel: string; content: Record<string, string | null> | null; created: string; updated: string } }[] }>(
+      `/flow-actions/${actionId}/flow-messages?fields[flow-message]=name,channel,content,created,updated`);
+    return r.data.map((d) => ({ id: d.id, name: d.attributes.name, channel: d.attributes.channel, content: d.attributes.content ?? {}, updated: d.attributes.updated }));
+  }
+
+  /** Rendered template HTML for one flow message (null for SMS or when no template is attached). */
+  async flowMessageTemplateHtml(messageId: string): Promise<{ id: string; html: string | null; text: string | null } | null> {
+    try {
+      const r = await this.req<{ data: { id: string; attributes: { html: string | null; text: string | null } } | null }>(`/flow-messages/${messageId}/template?fields[template]=html,text`);
+      return r.data ? { id: r.data.id, html: r.data.attributes.html, text: r.data.attributes.text } : null;
+    } catch (e) {
+      if (/Klaviyo 404/.test(String(e))) return null;
+      throw e;
+    }
   }
 
   async placedOrderMetricId(): Promise<string | null> {

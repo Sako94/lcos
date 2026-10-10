@@ -15,14 +15,15 @@ export default async function CalendarPage({ params }: { params: Promise<{ slug:
     const cycles = await tx<{ id: string; startsOn: string; endsOn: string; objective: string | null; status: string; approvedBy: string | null }[]>`
       select c.id, c.starts_on, c.ends_on, c.objective, c.status, p.full_name as approved_by from public.cycles c left join public.profiles p on p.id = c.approved_by
       where c.client_id = ${client.id} order by c.starts_on desc`;
-    const slots = await tx<{ id: string; cycleId: string; sendOn: string; channel: string; purpose: string; title: string; segment: string | null; offer: string | null; briefId: string | null; briefStatus: string | null }[]>`
-      select s.id, s.cycle_id, s.send_on, s.channel, s.purpose, s.title, s.segment, f.statement as offer, b.id as brief_id, b.status as brief_status
+    const slots = await tx<{ id: string; cycleId: string; sendOn: string; channel: string; purpose: string; title: string; segment: string | null; offer: string | null; briefId: string | null; briefStatus: string | null; priority: number; audienceRule: string | null; exclusions: string | null; replacesSlotId: string | null }[]>`
+      select s.id, s.cycle_id, s.send_on, s.channel, s.purpose, s.title, s.segment, f.statement as offer, b.id as brief_id, b.status as brief_status, s.priority, s.audience_rule, s.exclusions, s.replaces_slot_id
       from public.calendar_slots s left join public.facts f on f.id = s.offer_fact_id left join public.briefs b on b.slot_id = s.id
       where s.client_id = ${client.id} order by s.send_on`;
     const offers = await tx<{ id: string; statement: string }[]>`select id, statement from public.facts where client_id = ${client.id} and category = 'offers_discounts' and status = 'approved'`;
     const briefs = await tx<{ id: string; title: string; status: string; updatedAt: string; owner: string | null }[]>`
       select b.id, b.title, b.status, b.updated_at, p.full_name as owner from public.briefs b left join public.profiles p on p.id = b.owner_id where b.client_id = ${client.id} order by b.updated_at desc`;
-    return { role, cycles, slots, offers, briefs };
+    const policy = (await tx<{ contactPolicy: { email_max_per_week: number; sms_max_per_week: number; promo_streak_max: number } }[]>`select contact_policy from public.clients where id = ${client.id}`)[0].contactPolicy;
+    return { role, cycles, slots, offers, briefs, policy };
   });
   const canEdit = d.role === "admin" || d.role === "account_lead";
   const isAdmin = d.role === "admin";
@@ -30,7 +31,7 @@ export default async function CalendarPage({ params }: { params: Promise<{ slug:
 
   return (
     <>
-      <PageHeader title={`${client.name} · Calendar and briefs`} subtitle="Two-week cycles; every slot gets a brief; approval sits on a copy version (SOP 6, 7, 8)." />
+      <PageHeader title={`${client.name} · Calendar and briefs`} subtitle={<>Two-week cycles; every slot gets a brief; approval sits on a copy version (SOP 6, 7, 8). Contact policy enforced at approval: {d.policy.email_max_per_week} email / {d.policy.sms_max_per_week} SMS per week, no more than {d.policy.promo_streak_max} promotion in a row; conditional sends replace their base slot. <Link className="underline" href={`/clients/${slug}/strategy`}>Edit rules</Link></>} />
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <div className="space-y-6">
           {d.cycles.map((c) => {
@@ -47,14 +48,14 @@ export default async function CalendarPage({ params }: { params: Promise<{ slug:
                   </div>
                 ) : null}
                 {slots.length === 0 ? <Empty>No slots yet.</Empty> : (
-                  <Table head={["Send", "Channel", "Purpose", "Campaign", "Segment", "Offer", "Brief"]}>
+                  <Table head={["Send", "Channel", "Purpose", "Campaign", "Audience", "Offer", "Brief"]}>
                     {slots.map((s) => (
                       <tr key={s.id}>
                         <td className="py-2 pr-4">{fmtDate(s.sendOn)}</td>
                         <td className="py-2 pr-4 uppercase">{s.channel}</td>
                         <td className="py-2 pr-4">{s.purpose}</td>
-                        <td className="py-2 pr-4">{s.title}</td>
-                        <td className="py-2 pr-4">{s.segment ?? "—"}</td>
+                        <td className="py-2 pr-4">{s.title}{s.replacesSlotId ? <span className="ml-1 mono text-[10px] text-fg-muted">conditional · replaces {slots.find((x) => x.id === s.replacesSlotId)?.title ?? "a base send"}</span> : null}</td>
+                        <td className="py-2 pr-4 text-xs">{s.segment ?? "—"}{s.audienceRule ? <span className="block text-fg-muted">{s.audienceRule}</span> : null}{s.exclusions ? <span className="block text-fg-muted">excl: {s.exclusions}</span> : null}<span className="block mono text-[10px] text-fg-muted">P{s.priority}</span></td>
                         <td className="py-2 pr-4 text-xs">{s.offer ?? "none"}</td>
                         <td className="py-2 pr-4">{s.briefId ? <Link className="underline" href={`/clients/${slug}/briefs/${s.briefId}`}><Chip value={s.briefStatus ?? "draft"} /></Link> : "—"}</td>
                       </tr>
@@ -74,6 +75,10 @@ export default async function CalendarPage({ params }: { params: Promise<{ slug:
                       </select>
                       <input name="title" placeholder="Campaign title" className={input + " md:col-span-2"} required />
                       <input name="segment" placeholder="Segment" className={input} />
+                      <input name="audience_rule" placeholder="Audience rule (who qualifies)" className={input} />
+                      <input name="exclusions" placeholder="Exclusions (buyers, recovery entrants, flow-owned)" className={input} />
+                      <select name="priority" className={input} defaultValue="3">{[1, 2, 3, 4, 5].map((p) => <option key={p} value={p}>priority {p}{p === 1 ? " (highest)" : ""}</option>)}</select>
+                      <select name="replaces_slot_id" className={input}><option value="">Base send (counts toward the cap)</option>{slots.map((x) => <option key={x.id} value={x.id}>conditional: replaces “{x.title}”</option>)}</select>
                       <select name="offer_fact_id" className={input + " md:col-span-2"}>
                         <option value="">No offer</option>
                         {d.offers.map((o) => <option key={o.id} value={o.id}>{o.statement.slice(0, 90)}</option>)}

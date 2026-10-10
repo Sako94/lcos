@@ -1,16 +1,17 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { withUser } from "@/lib/db";
-import { QA_ITEMS, clientRole, getClient } from "@/lib/clients";
+import { HANDOFF_READY_ITEMS, QA_ITEMS, clientRole, getClient } from "@/lib/clients";
 import { AgentTag, Card, Chip, Empty, PageHeader, btnPrimary, btnSecondary, fmtDate, input } from "@/components/ui";
 import { ActionButton, ActionForm } from "@/components/action-form";
-import { addCopyVersion, draftBrief, saveQa, setBriefStatus, updateBrief } from "../../calendar/actions";
+import { addCopyVersion, draftBrief, saveHandoff, saveQa, setBriefStatus, updateBrief } from "../../calendar/actions";
 
 type Brief = {
   id: string; title: string; goal: string | null; segment: string | null; offerFactId: string | null; keyMessage: string | null; proof: string | null; cta: string | null;
   designNotes: string | null; designUrl: string | null; status: string; currentCopyVersion: number; qaChecklist: { item: string; passed: boolean }[];
   internalApprovedVersion: number | null; internalApprovedBy: string | null; internalApprovedAt: string | null; clientApprovalEvidenceUrl: string | null; clientApprovedAt: string | null;
   owner: string | null; sendOn: string | null; channel: string | null;
+  handoff: { context?: string; copy_notes?: string; design?: string; delivery?: string; ready_check?: { item: string; passed: boolean }[] }; handoffReleasedAt: string | null; handoffReleasedBy: string | null;
 };
 type Copy = { id: string; version: number; subjectLines: string[]; previewText: string | null; body: string | null; smsBody: string | null; factIds: string[]; createdByKind: string; createdBy: string | null; agentRunId: string | null; createdAt: string };
 
@@ -25,8 +26,8 @@ export default async function BriefPage({ params }: { params: Promise<{ slug: st
     const brief = (await tx<Brief[]>`
       select b.id, b.title, b.goal, b.segment, b.offer_fact_id, b.key_message, b.proof, b.cta, b.design_notes, b.design_url, b.status, b.current_copy_version, b.qa_checklist,
              b.internal_approved_version, pa.full_name as internal_approved_by, b.internal_approved_at, b.client_approval_evidence_url, b.client_approved_at,
-             po.full_name as owner, s.send_on, s.channel
-      from public.briefs b left join public.profiles pa on pa.id = b.internal_approved_by left join public.profiles po on po.id = b.owner_id
+             po.full_name as owner, s.send_on, s.channel, b.handoff, b.handoff_released_at, ph.full_name as handoff_released_by
+      from public.briefs b left join public.profiles pa on pa.id = b.internal_approved_by left join public.profiles po on po.id = b.owner_id left join public.profiles ph on ph.id = b.handoff_released_by
       left join public.calendar_slots s on s.id = b.slot_id where b.id = ${id} and b.client_id = ${client.id}`)[0];
     if (!brief) return null;
     const copies = await tx<Copy[]>`
@@ -145,6 +146,26 @@ export default async function BriefPage({ params }: { params: Promise<{ slug: st
               {canEdit ? <button className={btnSecondary + " mt-2"}>Save checklist</button> : null}
             </ActionForm>
             <p className="mt-2 text-xs text-neutral-500">{qa.filter((q) => q.passed).length}/{qa.length} passed. Any unchecked item blocks internal approval.</p>
+          </Card>
+          <Card title={<>Design handoff (SOP 14){brief.handoffReleasedAt ? <span className="ml-2 normal-case text-emerald-700">released {fmtDate(brief.handoffReleasedAt)} by {brief.handoffReleasedBy}</span> : null}</>}>
+            <ActionForm action={saveHandoff.bind(null, slug, brief.id, HANDOFF_READY_ITEMS)} className="space-y-2" resetOnSuccess={false}>
+              <label className="block text-xs text-neutral-500">Context (objective, audience, offer, timing)<textarea name="context" defaultValue={brief.handoff.context ?? ""} className={input} rows={2} disabled={!canEdit} /></label>
+              <label className="block text-xs text-neutral-500">Copy notes (approved version, exact CTA destinations)<textarea name="copy_notes" defaultValue={brief.handoff.copy_notes ?? ""} className={input} rows={2} disabled={!canEdit} /></label>
+              <label className="block text-xs text-neutral-500">Design direction (modules, hierarchy, assets)<textarea name="design" defaultValue={brief.handoff.design ?? ""} className={input} rows={2} disabled={!canEdit} /></label>
+              <label className="block text-xs text-neutral-500">Delivery (owner, date, format)<input name="delivery" defaultValue={brief.handoff.delivery ?? ""} className={input} disabled={!canEdit} /></label>
+              <p className="label mt-1">Ready check</p>
+              {HANDOFF_READY_ITEMS.map((item, i) => (
+                <label key={item} className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" name={`ready_${i}`} defaultChecked={brief.handoff.ready_check?.[i]?.passed ?? false} disabled={!canEdit} /> {item}
+                </label>
+              ))}
+              {canEdit ? (
+                <div className="flex items-center gap-3">
+                  <button className={btnSecondary}>Save handoff</button>
+                  {!brief.handoffReleasedAt ? <label className="flex items-center gap-1 text-xs"><input type="checkbox" name="release" /> release to designer (needs every item passed)</label> : null}
+                </div>
+              ) : null}
+            </ActionForm>
           </Card>
           <Card title="Client approval (Figma + Slack)">
             {brief.clientApprovedAt ? (

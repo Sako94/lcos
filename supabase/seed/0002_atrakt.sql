@@ -11,6 +11,9 @@ insert into public.clients (id, name, slug, website, objective) values
  ('10000000-0000-4000-8000-000000000001', 'Atrakt', 'atrakt', 'https://atrakt.com',
   'Move revenue from one-and-done TikTok Shop buyers to owned, repeat, subscription-based website revenue; Q4 2026 is the first fully in-stock selling season.')
 on conflict (id) do update set objective = excluded.objective;
+-- Rules the nightly link check and cycle approval use (Sako-stated: rebrand from Ascend Labs; site is atrakt.com)
+update public.clients set approved_domains = '{atrakt.com,www.atrakt.com,shop.atrakt.com}', old_brand_terms = '{Ascend Labs,ascendlabs,ascend.labs}'
+where id = '10000000-0000-4000-8000-000000000001';
 
 insert into public.client_assignments (client_id, user_id, role_on_client) values
  ('10000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000001', 'admin'),
@@ -149,6 +152,7 @@ insert into public.findings (client_id, audit_id, area, title, detail, evidence_
 insert into public.agent_jobs (client_id, job_type, schedule, enabled) values
  ('10000000-0000-4000-8000-000000000001', 'health_review', '0 6 * * *', true),
  ('10000000-0000-4000-8000-000000000001', 'flow_sync', '0 5 * * *', true),
+ ('10000000-0000-4000-8000-000000000001', 'link_check', '30 5 * * *', true),
  ('10000000-0000-4000-8000-000000000001', 'flow_logic_doc', null, true),
  ('10000000-0000-4000-8000-000000000001', 'fact_extraction', null, true),
  ('10000000-0000-4000-8000-000000000001', 'brief_draft', null, true),

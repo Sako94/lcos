@@ -56,3 +56,12 @@ export const QA_ITEMS = [
   "Design matches brief",
   "Send time matches calendar",
 ];
+
+/** SOP 14 — design handoff ready check (from approved copy to a clear designer brief). */
+export const HANDOFF_READY_ITEMS = [
+  "Approved copy version named and frozen",
+  "Every CTA has a destination URL on an approved domain",
+  "Assets vetted and linked (no placeholder imagery)",
+  "Mobile hierarchy and dark mode noted",
+  "Owner and delivery date confirmed",
+];

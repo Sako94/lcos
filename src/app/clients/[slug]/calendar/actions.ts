@@ -39,10 +39,11 @@ export async function addSlot(slug: string, formData: FormData): Promise<ActionR
   try {
     await withUser(user.id, async (tx) => {
       const slot = await tx<{ id: string }[]>`
-        insert into public.calendar_slots (client_id, cycle_id, send_on, channel, purpose, title, segment, offer_fact_id, notes)
+        insert into public.calendar_slots (client_id, cycle_id, send_on, channel, purpose, title, segment, offer_fact_id, notes, priority, audience_rule, exclusions, replaces_slot_id)
         values (${String(formData.get("client_id"))}, ${String(formData.get("cycle_id"))}, ${String(formData.get("send_on"))}::date,
                 ${String(formData.get("channel"))}::app.channel, ${String(formData.get("purpose"))}::app.slot_purpose, ${String(formData.get("title"))},
-                ${String(formData.get("segment") ?? "") || null}, ${String(formData.get("offer_fact_id") ?? "") || null}, ${String(formData.get("notes") ?? "") || null})
+                ${String(formData.get("segment") ?? "") || null}, ${String(formData.get("offer_fact_id") ?? "") || null}, ${String(formData.get("notes") ?? "") || null},
+                ${Number(formData.get("priority")) || 3}, ${String(formData.get("audience_rule") ?? "").trim() || null}, ${String(formData.get("exclusions") ?? "").trim() || null}, ${String(formData.get("replaces_slot_id") ?? "") || null})
         returning id`;
       await tx`insert into public.briefs (client_id, slot_id, title, segment, offer_fact_id, owner_id)
                values (${String(formData.get("client_id"))}, ${slot[0].id}, ${String(formData.get("title"))}, ${String(formData.get("segment") ?? "") || null}, ${String(formData.get("offer_fact_id") ?? "") || null}, ${user.id})`;
@@ -126,4 +127,24 @@ export async function createStandaloneBrief(slug: string, formData: FormData) {
   const id = await withUser(user.id, (tx) => tx<{ id: string }[]>`
     insert into public.briefs (client_id, title, owner_id) values (${String(formData.get("client_id"))}, ${String(formData.get("title"))}, ${user.id}) returning id`);
   redirect(`/clients/${slug}/briefs/${id[0].id}`);
+}
+
+/** Design handoff (SOP 14): context, design direction, delivery, and a ready check. Release is gated by the database. */
+export async function saveHandoff(slug: string, briefId: string, items: string[], formData: FormData): Promise<ActionResult> {
+  const user = await requireUser();
+  const release = formData.get("release") === "on";
+  const handoff = {
+    context: String(formData.get("context") ?? "").trim(),
+    copy_notes: String(formData.get("copy_notes") ?? "").trim(),
+    design: String(formData.get("design") ?? "").trim(),
+    delivery: String(formData.get("delivery") ?? "").trim(),
+    ready_check: items.map((item, i) => ({ item, passed: formData.get(`ready_${i}`) === "on" })),
+  };
+  try {
+    await withUser(user.id, (tx) => tx`update public.briefs set handoff = ${tx.json(handoff)}, handoff_released_at = case when ${release} then coalesce(handoff_released_at, now()) else handoff_released_at end where id = ${briefId}`);
+    revalidatePath(`/clients/${slug}/briefs/${briefId}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: msg(e) };
+  }
 }

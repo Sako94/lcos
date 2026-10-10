@@ -3,12 +3,22 @@ import { withUser } from "@/lib/db";
 import { FACT_CATEGORIES, clientRole, getClient } from "@/lib/clients";
 import { Card, Chip, Empty, PageHeader, btnPrimary, btnSecondary, input, fmtDate, AgentTag } from "@/components/ui";
 import { ActionButton, ActionForm } from "@/components/action-form";
-import { addSource, editFact, proposeFact, setFactStatus } from "./actions";
+import { addSource, editFact, proposeFact, setFactStatus, supersedeFact } from "./actions";
+
+type Basis = { metric_key?: string; value?: number | null; window_start?: string | null; window_end?: string | null; time_basis?: string | null; population?: string | null };
+const EVIDENCE: { key: string; label: string; hint: string }[] = [
+  { key: "stated", label: "Stated", hint: "the client or team said it" },
+  { key: "observed", label: "Observed", hint: "read from a platform or export" },
+  { key: "inferred", label: "Inferred", hint: "derived from observed data" },
+  { key: "modeled", label: "Modeled", hint: "a scenario or forecast" },
+  { key: "proposed", label: "Proposed", hint: "a recommendation, not yet true" },
+];
 
 type Fact = {
   id: string; category: string; statement: string; status: "proposed" | "verified" | "approved" | "stale";
   sourceQuote: string | null; sourceTitle: string | null; sourceUrl: string | null; proposedByKind: string;
   verifiedBy: string | null; approvedBy: string | null; approvedAt: string | null; reviewDue: string | null; version: number;
+  evidenceClass: string; metricBasis: Basis | null; snapshotKind: string | null; snapshotAt: string | null; supersededBy: string | null; correctionNote: string | null; supersededByStatement: string | null;
 };
 
 export default async function FactsPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ status?: string }> }) {
@@ -20,14 +30,17 @@ export default async function FactsPage({ params, searchParams }: { params: Prom
     const role = await clientRole(tx, client.id);
     const facts = await tx<Fact[]>`
       select f.id, f.category, f.statement, f.status, f.source_quote, s.title as source_title, s.url as source_url, f.proposed_by_kind,
-             pv.full_name as verified_by, pa.full_name as approved_by, f.approved_at, f.review_due, f.version
-      from public.facts f left join public.sources s on s.id = f.source_id
+             pv.full_name as verified_by, pa.full_name as approved_by, f.approved_at, f.review_due, f.version,
+             f.evidence_class, f.metric_basis, sn.kind as snapshot_kind, sn.captured_at as snapshot_at, f.superseded_by, f.correction_note,
+             (select statement from public.facts f2 where f2.id = f.superseded_by) as superseded_by_statement
+      from public.facts f left join public.sources s on s.id = f.source_id left join public.snapshots sn on sn.id = f.snapshot_id
       left join public.profiles pv on pv.id = f.verified_by left join public.profiles pa on pa.id = f.approved_by
       where f.client_id = ${client.id} ${filter ? tx`and f.status = ${filter}::app.fact_status` : tx``}
       order by f.category, f.status, f.created_at`;
     const sources = await tx<{ id: string; title: string; kind: string; url: string | null; capturedAt: string | null }[]>`
       select id, title, kind, url, captured_at from public.sources where client_id = ${client.id} order by captured_at desc nulls last`;
-    return { role, facts, sources };
+    const metrics = await tx<{ key: string; name: string }[]>`select key, name from public.metric_definitions order by name`;
+    return { role, facts, sources, metrics };
   });
   const canReview = d.role === "admin" || d.role === "account_lead";
   const isAdmin = d.role === "admin";
@@ -69,7 +82,14 @@ export default async function FactsPage({ params, searchParams }: { params: Prom
                             {f.sourceQuote ? <span className="block italic">“{f.sourceQuote}”</span> : null}
                             {f.approvedBy ? <span className="block">Approved by {f.approvedBy} on {fmtDate(f.approvedAt)}</span> : f.verifiedBy ? <span className="block">Verified by {f.verifiedBy}</span> : null}
                             {f.reviewDue ? <span className="block">Review due {fmtDate(f.reviewDue)}</span> : null}
-                            <span className="block">v{f.version} · proposed by {f.proposedByKind === "agent" ? <AgentTag /> : "team"}</span>
+                            <span className="block">v{f.version} · proposed by {f.proposedByKind === "agent" ? <AgentTag /> : "team"} · <span className="mono uppercase tracking-[0.08em]">{f.evidenceClass}</span></span>
+                            {f.metricBasis?.metric_key ? (
+                              <span className="block mono text-[11px]">
+                                basis: {f.metricBasis.metric_key}{f.metricBasis.value != null ? ` = ${f.metricBasis.value}` : ""}{f.metricBasis.window_start ? ` · ${f.metricBasis.window_start} → ${f.metricBasis.window_end ?? ""}` : ""}{f.metricBasis.time_basis ? ` · ${f.metricBasis.time_basis}` : ""}{f.metricBasis.population ? ` · ${f.metricBasis.population}` : ""}
+                              </span>
+                            ) : null}
+                            {f.snapshotKind ? <span className="block mono text-[11px]">snapshot: {f.snapshotKind} · {fmtDate(f.snapshotAt)}</span> : null}
+                            {f.supersededBy ? <span className="block text-amber-700">Superseded: {f.correctionNote} → “{f.supersededByStatement?.slice(0, 80)}”</span> : null}
                           </p>
                         </div>
                         <div className="flex shrink-0 flex-col items-end gap-1">
@@ -103,6 +123,16 @@ export default async function FactsPage({ params, searchParams }: { params: Prom
                               <button className={btnSecondary}>Save (creates a new version)</button>
                             </div>
                           </ActionForm>
+                          {!f.supersededBy ? (
+                            <ActionForm action={supersedeFact.bind(null, slug, f.id)} className="mt-2 flex flex-wrap gap-1">
+                              <select name="superseded_by" className={`${input} w-64`} required>
+                                <option value="">Corrected by fact…</option>
+                                {d.facts.filter((g) => g.id !== f.id && g.category === f.category).map((g) => <option key={g.id} value={g.id}>{g.statement.slice(0, 60)}</option>)}
+                              </select>
+                              <input name="correction_note" placeholder="Why the old fact was wrong" className={`${input} w-64`} required />
+                              <button className="text-xs underline">supersede (marks this stale)</button>
+                            </ActionForm>
+                          ) : null}
                         </details>
                       ) : null}
                     </li>
@@ -129,6 +159,22 @@ export default async function FactsPage({ params, searchParams }: { params: Prom
                 ))}
               </select>
               <input name="source_quote" placeholder="Quote or location in the source" className={input} />
+              <select name="evidence_class" className={input}>
+                {EVIDENCE.map((e) => <option key={e.key} value={e.key}>{e.label} · {e.hint}</option>)}
+              </select>
+              <details>
+                <summary className="cursor-pointer text-xs text-fg-muted">Metric basis (required for observed, inferred, modeled figures)</summary>
+                <div className="mt-2 space-y-2">
+                  <select name="metric_key" className={input}><option value="">Metric…</option>{d.metrics.map((m) => <option key={m.key} value={m.key}>{m.name}</option>)}</select>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input name="metric_value" type="number" step="any" placeholder="Value" className={input} />
+                    <select name="time_basis" className={input}><option value="">time basis…</option><option value="event_time">event time</option><option value="send_date">send date</option><option value="order_date">order date</option><option value="snapshot">snapshot</option></select>
+                    <input name="window_start" type="date" className={input} />
+                    <input name="window_end" type="date" className={input} />
+                  </div>
+                  <input name="population" placeholder="Population (e.g. web-source orders, mature cohorts only)" className={input} />
+                </div>
+              </details>
               <button className={btnPrimary}>Propose</button>
             </ActionForm>
           </Card>

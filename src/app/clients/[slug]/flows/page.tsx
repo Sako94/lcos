@@ -3,7 +3,9 @@ import { withUser } from "@/lib/db";
 import { REBUILD_STATUSES, clientRole, getClient } from "@/lib/clients";
 import { Card, Chip, Empty, PageHeader, btnPrimary, btnSecondary, fmtDate, input } from "@/components/ui";
 import { ActionButton, ActionForm } from "@/components/action-form";
-import { draftFlowLogic, proposeChange, setChangeStatus, syncFlows, updateFlow } from "./actions";
+import { draftFlowLogic, proposeChange, runLinkCheck, setChangeStatus, syncFlows, updateFlow } from "./actions";
+
+type Msg = { id: string; flowId: string; externalId: string; channel: string; name: string; subject: string | null; fromLabel: string | null; externalStatus: string | null; links: { href: string }[]; checks: { old_domain?: string[]; old_brand?: string[]; sender_old_brand?: boolean; unreachable?: string[]; checked_at?: string }; lastSyncedAt: string | null };
 
 const STANDARD_JOURNEY = ["welcome", "browse", "cart", "checkout", "post-purchase", "second purchase", "replenishment", "winback", "sunset", "back in stock", "vip", "subscription onboarding"];
 
@@ -21,7 +23,9 @@ export default async function FlowsPage({ params }: { params: Promise<{ slug: st
     const changes = await tx<{ id: string; flowId: string; flowName: string; title: string; afterLogic: string; rationale: string | null; status: string; createdAt: string }[]>`
       select c.id, c.flow_id, f.name as flow_name, c.title, c.after_logic, c.rationale, c.status, c.created_at
       from public.proposed_changes c join public.flows f on f.id = c.flow_id where c.client_id = ${client.id} order by c.created_at desc`;
-    return { role, flows, changes };
+    const messages = await tx<Msg[]>`
+      select id, flow_id, external_id, channel, name, subject, from_label, external_status, links, checks, last_synced_at from public.flow_messages where client_id = ${client.id} order by name`;
+    return { role, flows, changes, messages };
   });
   const canEdit = d.role === "admin" || d.role === "account_lead";
   const isAdmin = d.role === "admin";
@@ -34,7 +38,7 @@ export default async function FlowsPage({ params }: { params: Promise<{ slug: st
       <PageHeader
         title={`${client.name} · Flows`}
         subtitle={<>{live.length} live · {d.flows.length} total · last sync {fmtDate(d.flows[0]?.lastSyncedAt)} · never edit a live flow in place (SOP 5)</>}
-        actions={canEdit ? <ActionButton action={syncFlows.bind(null, slug, client.id)} className={btnSecondary}>Sync from Klaviyo</ActionButton> : null}
+        actions={canEdit ? <div className="flex gap-2"><ActionButton action={syncFlows.bind(null, slug, client.id)} className={btnSecondary}>Sync from Klaviyo</ActionButton><ActionButton action={runLinkCheck.bind(null, slug, client.id)} className={btnSecondary}>Run link check</ActionButton></div> : null}
       />
       <Card title="Journey coverage (name-based, confirm manually)" className="mb-6">
         <p className="text-sm">
@@ -67,6 +71,34 @@ export default async function FlowsPage({ params }: { params: Promise<{ slug: st
                 ) : null}
               </div>
             </div>
+            {(() => {
+              const msgs = d.messages.filter((m) => m.flowId === f.id);
+              if (!msgs.length) return null;
+              return (
+                <div className="mt-3">
+                  <p className="mb-1 text-xs uppercase tracking-wide text-neutral-500">Messages · checked {fmtDate(msgs[0].checks.checked_at ?? msgs[0].lastSyncedAt)}</p>
+                  <ul className="divide-y divide-line-soft rounded-md border border-line-soft text-xs">
+                    {msgs.map((m) => {
+                      const bad = (m.checks.old_domain?.length ?? 0) + (m.checks.old_brand?.length ?? 0) + (m.checks.sender_old_brand ? 1 : 0);
+                      return (
+                        <li key={m.id} className="flex flex-wrap items-center gap-2 px-2 py-1.5">
+                          <span className={`mono ${bad ? "text-coral" : "text-emerald-700"}`}>{bad ? `✕ ${bad}` : "✓"}</span>
+                          <Chip value={m.channel} />
+                          <span className="font-medium">{m.name}</span>
+                          <span className="mono text-fg-muted">{m.externalId}{m.externalStatus !== "live" ? " · not live" : ""}</span>
+                          {m.subject ? <span className="text-fg-2">“{m.subject}”</span> : null}
+                          {m.fromLabel ? <span className="mono text-fg-muted">from {m.fromLabel}</span> : null}
+                          <span className="mono text-fg-muted">{m.links.length} links</span>
+                          {m.checks.old_domain?.length ? <span className="text-coral">off-domain: {m.checks.old_domain.slice(0, 3).join(", ")}</span> : null}
+                          {m.checks.old_brand?.length ? <span className="text-coral">old brand: {m.checks.old_brand.join(", ")}</span> : null}
+                          {m.checks.sender_old_brand ? <span className="text-coral">old-brand sender</span> : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              );
+            })()}
             <div className="mt-3 grid gap-4 md:grid-cols-2">
               <div>
                 <p className="mb-1 text-xs uppercase tracking-wide text-neutral-500">Documented logic</p>

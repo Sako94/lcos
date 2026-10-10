@@ -6,8 +6,10 @@ import { flowSync } from "./jobs/flow-sync";
 import { flowLogicDoc } from "./jobs/flow-logic-doc";
 import { briefDraft } from "./jobs/brief-draft";
 import { meetingPreread } from "./jobs/meeting-preread";
+import { linkCheck } from "./jobs/link-check";
+import { createHash } from "node:crypto";
 
-export type JobType = "health_review" | "flow_sync" | "flow_logic_doc" | "brief_draft" | "meeting_preread";
+export type JobType = "health_review" | "flow_sync" | "flow_logic_doc" | "brief_draft" | "meeting_preread" | "link_check";
 
 export type JobContext = {
   tx: Tx;
@@ -16,7 +18,20 @@ export type JobContext = {
   runId: string;
   inputs: Record<string, unknown>;
   touched: (type: string, id: string) => void;
+  /** Record what the agent read as immutable, dated evidence. Returns the snapshot id findings and facts cite. */
+  snapshot: (s: SnapshotInput) => Promise<string>;
 };
+export type SnapshotInput = { sourceSystem: string; kind: string; payload: unknown; windowStart?: string; windowEnd?: string; rowCount?: number };
+
+async function captureSnapshot(tx: Tx, clientId: string, runId: string, s: SnapshotInput): Promise<string> {
+  const json = JSON.stringify(s.payload ?? {});
+  const hash = createHash("sha256").update(json).digest("hex");
+  const r = await tx<{ id: string }[]>`
+    insert into public.snapshots (client_id, source_system, kind, window_start, window_end, row_count, content_hash, payload, agent_run_id)
+    values (${clientId}, ${s.sourceSystem}, ${s.kind}, ${s.windowStart ?? null}, ${s.windowEnd ?? null}, ${s.rowCount ?? null}, ${hash}, ${tx.json(s.payload as postgres.JSONValue)}, ${runId})
+    returning id`;
+  return r[0].id;
+}
 
 export type JobResult = { summary: string; outputs?: Record<string, unknown>; needsApproval?: { action: string; payload: Record<string, unknown> } };
 
@@ -26,6 +41,7 @@ const JOBS: Record<JobType, (ctx: JobContext) => Promise<JobResult>> = {
   flow_logic_doc: flowLogicDoc,
   brief_draft: briefDraft,
   meeting_preread: meetingPreread,
+  link_check: linkCheck,
 };
 
 const MAX_ATTEMPTS = 3;
@@ -66,7 +82,7 @@ export async function runJob(opts: { clientId: string; jobType: JobType; request
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
       const result = await withAgent(opts.clientId, (tx) =>
-        JOBS[opts.jobType]({ tx, clientId: opts.clientId, slug, runId, inputs: opts.inputs ?? {}, touched: (type, id) => touched.push({ type, id }) }),
+        JOBS[opts.jobType]({ tx, clientId: opts.clientId, slug, runId, inputs: opts.inputs ?? {}, touched: (type, id) => touched.push({ type, id }), snapshot: (s) => captureSnapshot(tx, opts.clientId, runId, s) }),
       );
       await withService(async (tx) => {
         if (result.needsApproval) {

@@ -18,10 +18,16 @@ export async function proposeFact(slug: string, formData: FormData): Promise<Act
   const quote = String(formData.get("source_quote") ?? "").trim() || null;
   const sourceId = String(formData.get("source_id") ?? "") || null;
   if (!statement) return { ok: false, error: "Statement is required" };
+  const evidenceClass = String(formData.get("evidence_class") ?? "stated");
+  const metricKey = String(formData.get("metric_key") ?? "").trim();
+  const basis = metricKey
+    ? { metric_key: metricKey, value: Number(formData.get("metric_value")) || null, window_start: String(formData.get("window_start") ?? "") || null, window_end: String(formData.get("window_end") ?? "") || null,
+        time_basis: String(formData.get("time_basis") ?? "") || null, population: String(formData.get("population") ?? "").trim() || null }
+    : null;
   try {
     await withUser(user.id, (tx) => tx`
-      insert into public.facts (client_id, category, statement, source_id, source_quote, proposed_by)
-      values (${clientId}, ${category}::app.fact_category, ${statement}, ${sourceId}, ${quote}, ${user.id})`);
+      insert into public.facts (client_id, category, statement, source_id, source_quote, proposed_by, evidence_class, metric_basis)
+      values (${clientId}, ${category}::app.fact_category, ${statement}, ${sourceId}, ${quote}, ${user.id}, ${evidenceClass}::app.evidence_class, ${basis ? tx.json(basis) : null})`);
     revalidatePath(`/clients/${slug}/facts`);
     return { ok: true };
   } catch (e) {
@@ -67,6 +73,20 @@ export async function addSource(slug: string, formData: FormData): Promise<Actio
     await withUser(user.id, (tx) => tx`
       insert into public.sources (client_id, kind, title, url, captured_at, uploaded_by)
       values (${clientId}, ${kind}::app.source_kind, ${title}, ${url}, current_date, ${user.id})`);
+    revalidatePath(`/clients/${slug}/facts`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: msg(e) };
+  }
+}
+
+/** Correction: the new fact replaces the old one; the old one is marked Stale with the note (0006 rule). */
+export async function supersedeFact(slug: string, factId: string, formData: FormData): Promise<ActionResult> {
+  const user = await requireUser();
+  const newId = String(formData.get("superseded_by") ?? "").trim();
+  const note = String(formData.get("correction_note") ?? "").trim();
+  try {
+    await withUser(user.id, (tx) => tx`update public.facts set superseded_by = ${newId}, correction_note = ${note} where id = ${factId}`);
     revalidatePath(`/clients/${slug}/facts`);
     return { ok: true };
   } catch (e) {

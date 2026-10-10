@@ -10,6 +10,9 @@ type Score = { score?: number; reason?: string; evidence_url?: string; set_by_ki
 type Finding = {
   id: string; area: string; title: string; detail: string | null; evidenceUrl: string | null; severity: number; confidence: string;
   impact: number | null; effort: number | null; status: string; nextAction: string | null; createdByKind: string; agentRunId: string | null; createdAt: string; dismissReason: string | null;
+  evidenceClass: string; metricBasis: { metric_key?: string; value?: number; window_start?: string; window_end?: string } | null; snapshotKind: string | null; snapshotAt: string | null;
+  messageName: string | null; messageExternalId: string | null; flowName: string | null; readiness: string | null; nextReadout: string | null; estimateHoursMin: number | null; estimateHoursMax: number | null;
+  blockedBy: string[];
 };
 
 export const maxDuration = 300;
@@ -27,8 +30,12 @@ export default async function AuditPage({ params }: { params: Promise<{ slug: st
       ? (await tx<{ areas: Area[] }[]>`select areas from public.audit_templates where version = ${latest.templateVersion}`)[0]?.areas ?? []
       : [];
     const findings = await tx<Finding[]>`
-      select id, area, title, detail, evidence_url, severity, confidence, impact, effort, status, next_action, created_by_kind, agent_run_id, created_at, dismiss_reason
-      from public.findings where client_id = ${client.id} order by case status when 'new' then 0 when 'confirmed' then 1 when 'promoted' then 2 else 3 end, severity, created_at desc`;
+      select f.id, f.area, f.title, f.detail, f.evidence_url, f.severity, f.confidence, f.impact, f.effort, f.status, f.next_action, f.created_by_kind, f.agent_run_id, f.created_at, f.dismiss_reason,
+             f.evidence_class, f.metric_basis, sn.kind as snapshot_kind, sn.captured_at as snapshot_at, fm.name as message_name, fm.external_id as message_external_id, fl.name as flow_name,
+             f.readiness, f.next_readout, f.estimate_hours_min, f.estimate_hours_max,
+             coalesce((select array_agg(dd.statement) from public.decision_links dl join public.decisions dd on dd.id = dl.decision_id where dl.record_type = 'finding' and dl.record_id = f.id and dd.status = 'open'), '{}') as blocked_by
+      from public.findings f left join public.snapshots sn on sn.id = f.snapshot_id left join public.flow_messages fm on fm.id = f.flow_message_id left join public.flows fl on fl.id = fm.flow_id
+      where f.client_id = ${client.id} order by case f.status when 'new' then 0 when 'confirmed' then 1 when 'promoted' then 2 else 3 end, f.severity, f.created_at desc`;
     const lastRun = (await tx<{ id: string; status: string; finishedAt: string | null; error: string | null }[]>`
       select id, status, finished_at, error from public.agent_runs where client_id = ${client.id} and job_type = 'health_review' order by created_at desc limit 1`)[0];
     return { role, audits, latest, template, findings, lastRun };
@@ -123,6 +130,16 @@ export default async function AuditPage({ params }: { params: Promise<{ slug: st
                       </p>
                       {f.detail ? <p className="mt-1 text-sm text-neutral-700">{f.detail}</p> : null}
                       {f.nextAction ? <p className="mt-1 text-sm"><span className="font-medium">Next:</span> {f.nextAction}</p> : null}
+                      <p className="mt-1 mono text-[11px] text-fg-muted">
+                        <span className="uppercase tracking-[0.08em]">{f.evidenceClass}</span>
+                        {f.snapshotKind ? <> · snapshot {f.snapshotKind} {fmtDate(f.snapshotAt)}</> : f.createdByKind === "agent" ? <span className="text-amber-700"> · no snapshot</span> : null}
+                        {f.metricBasis?.metric_key ? <> · {f.metricBasis.metric_key}{f.metricBasis.value != null ? ` = ${typeof f.metricBasis.value === "number" && f.metricBasis.value < 1 ? (f.metricBasis.value * 100).toFixed(2) + "%" : f.metricBasis.value}` : ""}</> : null}
+                        {f.messageName ? <> · message “{f.messageName}” ({f.messageExternalId}) in {f.flowName}</> : null}
+                        {f.estimateHoursMin != null ? <> · {f.estimateHoursMin}–{f.estimateHoursMax}h</> : null}
+                      </p>
+                      {f.readiness ? <p className="text-xs text-fg-2"><span className="label mr-1">needs</span>{f.readiness}</p> : null}
+                      {f.nextReadout ? <p className="text-xs text-fg-2"><span className="label mr-1">readout</span>{f.nextReadout}</p> : null}
+                      {f.blockedBy.length ? <p className="text-xs text-amber-700">blocked by decision: {f.blockedBy.join("; ")}</p> : null}
                       {f.evidenceUrl ? <a className="text-xs underline" href={f.evidenceUrl}>evidence</a> : <span className="text-xs text-amber-700">no evidence link</span>}
                       {f.dismissReason ? <p className="text-xs text-neutral-500">Dismissed: {f.dismissReason}</p> : null}
                     </div>
@@ -131,7 +148,10 @@ export default async function AuditPage({ params }: { params: Promise<{ slug: st
                       {canReview && (f.status === "new" || f.status === "confirmed") ? (
                         <div className="flex flex-col items-end gap-1">
                           {f.status === "new" ? <ActionButton action={setFindingStatus.bind(null, slug, f.id, "confirmed")} className="text-xs underline">confirm</ActionButton> : null}
-                          <ActionButton action={setFindingStatus.bind(null, slug, f.id, "promoted")} className="text-xs underline">promote to task</ActionButton>
+                          <ActionForm action={setFindingStatus.bind(null, slug, f.id, "promoted")} className="flex gap-1">
+                            {!f.nextReadout ? <input name="next_readout" placeholder="how we'll know it worked" className="w-40 rounded border border-neutral-300 px-1 text-xs" required /> : null}
+                            <button className="text-xs underline">promote to task</button>
+                          </ActionForm>
                           <ActionForm action={setFindingStatus.bind(null, slug, f.id, "dismissed")} className="flex gap-1">
                             <input name="dismiss_reason" placeholder="reason" className="w-28 rounded border border-neutral-300 px-1 text-xs" required />
                             <button className="text-xs text-red-700 underline">dismiss</button>
