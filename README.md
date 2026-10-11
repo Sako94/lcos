@@ -11,7 +11,7 @@ Stack: Next.js 16 (App Router, server actions) · Postgres with row-level securi
 | Agency Home | `/` | Approval queue, new findings, overdue tasks, open commitments, meetings, recent agent runs |
 | Client Overview | `/clients/[slug]` | Objective, current cycle, scorecard, integration status (connected / pending / upload / link), open client dependencies |
 | Onboarding | `/clients/[slug]/onboarding`, `/onboarding/[id]` | Private client links (no login, 30-day expiry, extend/revoke/reopen); review each answer → promote to a Proposed fact citing the questionnaire, or skip |
-| Client form | `/onboard/[token]` | Public 9-section questionnaire (questions in `src/lib/onboarding/questions.ts`), autosave, submit |
+| Client form | `/onboard/[token]` | Public 8-section questionnaire (questions in `src/lib/onboarding/questions.ts`), autosave, submit |
 | Source of Truth | `/clients/[slug]/facts` | Facts by category with Proposed → Verified → Approved → Stale, sources, versions; admin approves sensitive categories |
 | Audit | `/clients/[slug]/audit` | Weighted 8-area audit template, findings with confirm / promote / dismiss, "Run health review now" |
 | Flows | `/clients/[slug]/flows` | Klaviyo inventory (read-only sync), documented logic, rebuild status, proposed changes with approve → apply (publish permission) → verify |

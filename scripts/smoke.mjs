@@ -194,7 +194,7 @@ const required = {
 };
 const choices = { discount_stance: "Occasional promotions only", esp: "Klaviyo", sms_platform: "One Text" };
 // walk every section, filling required answers
-for (let i = 0; i < 9; i++) {
+for (let i = 0; i < 8; i++) {
   for (const [k, v] of Object.entries(required)) {
     const el = cp.locator(`#q-${k}`);
     if (await el.count()) await el.fill(v);
